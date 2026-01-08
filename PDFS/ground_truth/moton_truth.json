@@ -1,0 +1,56 @@
+{
+    "sample_file": "moton1.pdf",
+    "invoice_number": "68699",
+    "date": "29/12/2025",
+    "vehicle": "KCZ 223P",
+    "customer": "FIRESIDE",
+    "line_items": [
+        {
+            "description": "Drivers Window Glass",
+            "quantity": 1,
+            "total": 6500
+        },
+        {
+            "description": "Altonator Diot Play/rectifiyer Repair",
+            "quantity": 1,
+            "total": 5000
+        },
+        {
+            "description": "Bonnet,rear Bumper Repair",
+            "quantity": 1,
+            "total": 2500
+        },
+        {
+            "description": "Wiring/bulbs",
+            "quantity": 1,
+            "total": 1500
+        },
+        {
+            "description": "Labour",
+            "quantity": 1,
+            "total": 3500
+        },
+        {
+            "description": "7ltrs Engine Oil",
+            "quantity": 1,
+            "total": 5200
+        },
+        {
+            "description": "Aircleaner",
+            "quantity": 1,
+            "total": 1100
+        },
+        {
+            "description": "Oil Filter",
+            "quantity": 1,
+            "total": 1000
+        },
+        {
+            "description": "Diesel Filter",
+            "quantity": 1,
+            "total": 950
+        }
+    ],
+    "grand_total": 27250,
+    "notes": "Clean computer-generated invoice - very structured with unit price and total columns"
+}

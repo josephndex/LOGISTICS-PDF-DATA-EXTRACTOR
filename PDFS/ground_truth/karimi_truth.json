@@ -1,0 +1,41 @@
+{
+    "sample_file": "karimi.pdf",
+    "invoice_number": "363",
+    "date": "31/1/26",
+    "vehicle": "KCE 690E",
+    "customer": "Fire Side Group",
+    "line_items": [
+        {
+            "description": "Engine Oil",
+            "quantity": 4,
+            "total": 2700
+        },
+        {
+            "description": "Spark Plugs",
+            "quantity": 4,
+            "total": 3500
+        },
+        {
+            "description": "Air Cleaner",
+            "quantity": 1,
+            "total": 500
+        },
+        {
+            "description": "Oil Filter",
+            "quantity": 1,
+            "total": 350
+        },
+        {
+            "description": "Brake pads holder",
+            "quantity": 2,
+            "total": 200
+        },
+        {
+            "description": "Mechanic Labour",
+            "quantity": 1,
+            "total": 1500
+        }
+    ],
+    "grand_total": 8750,
+    "notes": "Handwritten invoice - mixed typed header with handwritten line items"
+}

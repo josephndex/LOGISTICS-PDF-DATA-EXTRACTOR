@@ -1,0 +1,14 @@
+{
+    "invoice_number": "785",
+    "date": "07/01/2026",
+    "vehicle": "KDU 613B",
+    "supplier": "P.N. GITAU SHEET & METAL WORKS",
+    "line_items": [
+        {
+            "description": "REPAIR OF SUB-GUARD",
+            "quantity": 1,
+            "total": 1000
+        }
+    ],
+    "grand_total": 1000
+}

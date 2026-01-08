@@ -1,0 +1,33 @@
+{
+    "sample_file": "meneka1.pdf",
+    "invoice_number": "1026",
+    "date": "01/07/2025",
+    "vehicle": "KCY 080X",
+    "vehicle_make": "PROBOX",
+    "job_card": "8016",
+    "customer": "FIRESIDE GROUP LTD",
+    "line_items": [
+        {
+            "description": "ENGINE OIL",
+            "quantity": 1,
+            "total": 2800
+        },
+        {
+            "description": "OIL FILTER",
+            "quantity": 1,
+            "total": 550
+        },
+        {
+            "description": "AIR FILTER",
+            "quantity": 1,
+            "total": 550
+        },
+        {
+            "description": "LABOUR",
+            "quantity": 1,
+            "total": 1000
+        }
+    ],
+    "grand_total": 4900,
+    "notes": "Clean typed invoice - structured format with clear table"
+}
