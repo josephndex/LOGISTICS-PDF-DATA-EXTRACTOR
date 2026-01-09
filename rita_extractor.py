@@ -143,7 +143,7 @@ class InvoiceData:
                 'VEHICLE': self.vehicle,
                 'DESCRIPTION': item.description,
                 'QUANTITY': item.quantity,
-                'COST': item.cost,
+                'UNIT_COST': item.cost,
                 'TOTAL': item.total,
                 'SUPPLIER': self.supplier,
                 'OWNER': self.owner,
@@ -1650,7 +1650,7 @@ def run_extraction():
             rows.extend(inv.to_rows())
         
         df = pd.DataFrame(rows)
-        columns = ['INVOICE', 'DATE', 'VEHICLE', 'DESCRIPTION', 'QUANTITY', 'COST', 'TOTAL', 'SUPPLIER', 'OWNER']
+        columns = ['INVOICE', 'DATE', 'VEHICLE', 'DESCRIPTION', 'QUANTITY', 'UNIT_COST', 'TOTAL', 'SUPPLIER', 'OWNER']
         df = df[columns]
         
         csv_path = OUTPUT_DIR / f"rita_data_{timestamp}.csv"
@@ -1822,7 +1822,7 @@ def debug_single_pdf(folder_name: str, pdf_path: Path):
             print(f"   Owner:          {invoice.owner}")
             
             print(f"\n📦 LINE ITEMS ({len(invoice.line_items)}):")
-            print(f"   {'#':<3} {'Description':<35} {'Qty':>5} {'Cost':>12} {'Total':>12}")
+            print(f"   {'#':<3} {'Description':<35} {'Qty':>5} {'Unit Cost':>12} {'Total':>12}")
             print("   " + "-" * 70)
             
             for j, item in enumerate(invoice.line_items, 1):
@@ -1897,7 +1897,7 @@ def run_extraction_with_skip(skip_processed: bool = True):
             rows.extend(inv.to_rows())
         
         df = pd.DataFrame(rows)
-        columns = ['INVOICE', 'DATE', 'VEHICLE', 'DESCRIPTION', 'QUANTITY', 'COST', 'TOTAL', 'SUPPLIER', 'OWNER']
+        columns = ['INVOICE', 'DATE', 'VEHICLE', 'DESCRIPTION', 'QUANTITY', 'UNIT_COST', 'TOTAL', 'SUPPLIER', 'OWNER']
         df = df[columns]
         
         csv_path = OUTPUT_DIR / f"rita_data_{timestamp}.csv"
