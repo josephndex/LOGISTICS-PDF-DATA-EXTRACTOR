@@ -9,8 +9,7 @@ RITA (Really Intelligent Text Analyzer) extracts structured data from vehicle ma
 ## ✨ Features
 
 - **🤖 AI-Powered OCR**: Uses PaddleOCR v5 for accurate text recognition
-- **✍️ Handwritten & Typed**: Works with both computer-generated and handwritten invoices
-- **👀 Interactive Review**: Process invoices one-by-one with approve/edit workflow
+- **✍️ Handwritten & Typed**: Works with both computer-generated and handwritten invoices- **🌐 Web Interface**: FastAPI-powered web UI with side-by-side image preview- **👀 Interactive Review**: Process invoices one-by-one with approve/edit workflow
 - **✏️ Multi-Field Editing**: Edit date, vehicle, invoice number, or individual line items
 - **📊 Automatic Calculations**: UNIT_COST calculated as TOTAL ÷ QUANTITY
 - **🔄 Duplicate Detection**: Prevents duplicate entries using INVOICE + DESCRIPTION key
@@ -63,11 +62,20 @@ pip install gspread google-auth  # For Google Sheets sync
 LOGISTICS-PDF-DATA-EXTRACTOR/
 ├── rita_extractor.py         # Core OCR extraction engine
 ├── rita_interactive.py       # Interactive CLI with approval workflow
+├── rita_web.py               # FastAPI web interface
 ├── run_extractor.sh          # Linux launcher script
 ├── run_extractor.bat         # Windows launcher script
 ├── RITA_Extractor.desktop    # Linux desktop shortcut
 ├── google_sheets_config.json # Google Sheets API configuration
 ├── google_credentials.json   # Google API service account key
+├── templates/                # Jinja2 HTML templates
+│   ├── base.html
+│   ├── index.html
+│   ├── process.html
+│   ├── data.html
+│   └── settings.html
+├── static/                   # Static CSS files
+│   └── style.css
 ├── PDFS/                     # Input PDF folders (by supplier)
 │   ├── karimi/
 │   ├── meneka/
@@ -103,6 +111,15 @@ Double-click `run_extractor.bat`
 conda activate RITA_PDF_EXTRACTOR
 python rita_interactive.py
 ```
+
+### Web Interface
+
+```bash
+conda activate RITA_PDF_EXTRACTOR
+uvicorn rita_web:app --host 0.0.0.0 --port 8000
+```
+
+Then open http://localhost:8000 in your browser.
 
 ---
 

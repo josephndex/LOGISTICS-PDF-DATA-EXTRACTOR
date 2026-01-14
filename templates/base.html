@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}RITA PDF Extractor{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>🚗 RITA</h1>
+                <p>PDF Invoice Extractor</p>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="/" class="nav-item {% if page == 'home' %}active{% endif %}">
+                    <span class="nav-icon">🏠</span>
+                    <span>Home</span>
+                </a>
+                <a href="/process" class="nav-item {% if page == 'process' %}active{% endif %}">
+                    <span class="nav-icon">📁</span>
+                    <span>Process PDFs</span>
+                </a>
+                <a href="/data" class="nav-item {% if page == 'data' %}active{% endif %}">
+                    <span class="nav-icon">📊</span>
+                    <span>View Data</span>
+                </a>
+                <a href="/settings" class="nav-item {% if page == 'settings' %}active{% endif %}">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            
+            <div class="sidebar-stats">
+                <div class="stat-item">
+                    <span class="stat-label">Total Records</span>
+                    <span class="stat-value">{{ stats.total_records if stats else 0 }}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Total Amount</span>
+                    <span class="stat-value">KES {{ stats.total_amount if stats else '0.00' }}</span>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

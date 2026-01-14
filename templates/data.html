@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}View Data - RITA PDF Extractor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📊 Approved Data</h1>
+</div>
+
+{% if not has_data %}
+<section class="card">
+    <div class="alert alert-warning">
+        No approved data yet. Process some PDFs first!
+    </div>
+    <a href="/process" class="btn btn-primary">📁 Process PDFs</a>
+</section>
+{% else %}
+
+<!-- Summary Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <span class="stat-icon">📋</span>
+        <div class="stat-info">
+            <span class="stat-number">{{ total_records }}</span>
+            <span class="stat-title">Total Records</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <span class="stat-icon">🧾</span>
+        <div class="stat-info">
+            <span class="stat-number">{{ unique_invoices }}</span>
+            <span class="stat-title">Unique Invoices</span>
+        </div>
+    </div>
+    <div class="stat-card">
+        <span class="stat-icon">🚗</span>
+        <div class="stat-info">
+            <span class="stat-number">{{ unique_vehicles }}</span>
+            <span class="stat-title">Unique Vehicles</span>
+        </div>
+    </div>
+    <div class="stat-card info">
+        <span class="stat-icon">💰</span>
+        <div class="stat-info">
+            <span class="stat-number">KES {{ total_amount }}</span>
+            <span class="stat-title">Total Amount</span>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<section class="card">
+    <h2 class="card-title">🔍 Filters</h2>
+    <form action="/data" method="get" class="filter-form">
+        <div class="filter-row">
+            <div class="form-group">
+                <label>Supplier</label>
+                <select name="supplier" class="form-select">
+                    <option value="">All Suppliers</option>
+                    {% for s in suppliers %}
+                    <option value="{{ s }}" {% if s == selected_supplier %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Vehicle</label>
+                <select name="vehicle" class="form-select">
+                    <option value="">All Vehicles</option>
+                    {% for v in vehicles %}
+                    <option value="{{ v }}" {% if v == selected_vehicle %}selected{% endif %}>{{ v }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Search Description</label>
+                <input type="text" name="search" value="{{ search_query }}" 
+                       placeholder="Search..." class="form-input">
+            </div>
+            <div class="form-group filter-btn">
+                <button type="submit" class="btn btn-primary">🔍 Filter</button>
+            </div>
+        </div>
+    </form>
+    
+    <p class="filter-results">Showing {{ filtered_count }} of {{ total_records }} records</p>
+</section>
+
+<!-- Data Table -->
+<section class="card">
+    <h2 class="card-title">📋 Records</h2>
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Invoice</th>
+                    <th>Date</th>
+                    <th>Vehicle</th>
+                    <th>Description</th>
+                    <th>Qty</th>
+                    <th>Unit Cost</th>
+                    <th>Total</th>
+                    <th>Supplier</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in data %}
+                <tr>
+                    <td>{{ row.INVOICE }}</td>
+                    <td>{{ row.DATE }}</td>
+                    <td>{{ row.VEHICLE }}</td>
+                    <td>{{ row.DESCRIPTION }}</td>
+                    <td>{{ "%.1f"|format(row.QUANTITY) if row.QUANTITY else '' }}</td>
+                    <td>{{ "%.2f"|format(row.UNIT_COST) if row.UNIT_COST else '' }}</td>
+                    <td>{{ "%.2f"|format(row.TOTAL) if row.TOTAL else '' }}</td>
+                    <td>{{ row.SUPPLIER }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- Summary by Supplier -->
+<section class="card">
+    <h2 class="card-title">📊 Summary by Supplier</h2>
+    <div class="table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Supplier</th>
+                    <th>Invoices</th>
+                    <th>Total Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in summary %}
+                <tr>
+                    <td>{{ row.Supplier }}</td>
+                    <td>{{ row.Invoices }}</td>
+                    <td>KES {{ "%.2f"|format(row['Total Amount']) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- Export -->
+<section class="card">
+    <h2 class="card-title">📥 Export</h2>
+    <div class="action-buttons">
+        <a href="/export/excel" class="btn btn-primary">⬇️ Download Excel</a>
+        <a href="/export/csv" class="btn btn-secondary">⬇️ Download CSV</a>
+    </div>
+</section>
+
+{% endif %}
+{% endblock %}

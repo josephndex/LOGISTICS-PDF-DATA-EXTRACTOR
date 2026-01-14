@@ -1,0 +1,36 @@
+# RITA PDF Extractor - Dependencies
+# ==================================
+# Python 3.10 required
+
+# OCR Engine
+paddlepaddle>=2.5.0
+paddleocr>=2.7.0
+pytesseract>=0.3.10
+
+# PDF Processing
+pdf2image>=1.16.0
+Pillow>=10.0.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+openpyxl>=3.1.0
+
+# Text Matching
+rapidfuzz>=3.0.0
+dateparser>=1.1.0
+
+# Google Sheets Integration
+gspread>=5.0.0
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+
+# Database (optional)
+python-dotenv>=1.0.0
+mysql-connector-python>=8.0.0
+
+# Web UI
+fastapi>=0.109.0
+uvicorn>=0.27.0
+jinja2>=3.1.0
+python-multipart>=0.0.6

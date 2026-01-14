@@ -66,6 +66,9 @@ check_dependencies()
 
 import pandas as pd
 import numpy as np
+import subprocess
+import platform
+import tempfile
 from PIL import Image
 
 # Import from the main extractor with error handling
@@ -174,6 +177,91 @@ def print_info(text: str):
 def clear_screen():
     """Clear the terminal screen."""
     os.system('cls' if os.name == 'nt' else 'clear')
+
+
+# =============================================================================
+# IMAGE PREVIEW
+# =============================================================================
+
+# Global variable to store current invoice image for preview
+_current_preview_image: Optional[Image.Image] = None
+_preview_temp_file: Optional[str] = None
+
+
+def set_preview_image(image: Optional[Image.Image]):
+    """Store the current image for preview."""
+    global _current_preview_image
+    _current_preview_image = image
+
+
+def preview_current_image():
+    """Open the current invoice image in the system's default image viewer."""
+    global _current_preview_image, _preview_temp_file
+    
+    if _current_preview_image is None:
+        print_warning("No image available to preview")
+        return
+    
+    try:
+        # Create temp file for preview
+        temp_dir = tempfile.gettempdir()
+        temp_path = os.path.join(temp_dir, "rita_preview.png")
+        
+        # Save the image
+        _current_preview_image.save(temp_path, "PNG")
+        _preview_temp_file = temp_path
+        
+        # Open with system default viewer based on OS
+        system = platform.system()
+        
+        if system == "Linux":
+            # Try xdg-open first (works on most Linux distros)
+            try:
+                subprocess.Popen(["xdg-open", temp_path], 
+                                 stdout=subprocess.DEVNULL, 
+                                 stderr=subprocess.DEVNULL)
+                print_success(f"Opening image preview...")
+            except FileNotFoundError:
+                # Fallback to other common viewers
+                for viewer in ["eog", "feh", "display", "gpicview", "xviewer"]:
+                    try:
+                        subprocess.Popen([viewer, temp_path],
+                                         stdout=subprocess.DEVNULL,
+                                         stderr=subprocess.DEVNULL)
+                        print_success(f"Opening image preview with {viewer}...")
+                        break
+                    except FileNotFoundError:
+                        continue
+                else:
+                    print_warning(f"Could not find image viewer. Image saved at: {temp_path}")
+        
+        elif system == "Darwin":  # macOS
+            subprocess.Popen(["open", temp_path])
+            print_success(f"Opening image preview...")
+        
+        elif system == "Windows":
+            os.startfile(temp_path)  # type: ignore
+            print_success(f"Opening image preview...")
+        
+        else:
+            print_warning(f"Unknown OS. Image saved at: {temp_path}")
+    
+    except Exception as e:
+        print_error(f"Failed to open image preview: {e}")
+        if _preview_temp_file:
+            print_info(f"You can manually open: {_preview_temp_file}")
+
+
+def cleanup_preview():
+    """Clean up temporary preview files."""
+    global _current_preview_image, _preview_temp_file
+    _current_preview_image = None
+    if _preview_temp_file and os.path.exists(_preview_temp_file):
+        try:
+            os.remove(_preview_temp_file)
+        except Exception:
+            pass
+    _preview_temp_file = None
 
 
 # =============================================================================
@@ -615,6 +703,9 @@ def process_single_pdf(ocr: RitaOCR, folder: str, pdf_path: Path) -> Optional[In
     
     print_info(f"Loaded {len(images)} page(s)")
     
+    # Store image for preview
+    current_image = None
+    
     # Process first page (or first non-blank page)
     invoice = None
     for i, image in enumerate(images):
@@ -630,6 +721,7 @@ def process_single_pdf(ocr: RitaOCR, folder: str, pdf_path: Path) -> Optional[In
         
         try:
             invoice = extract_invoice(image, folder, pdf_path.name, ocr)
+            current_image = image  # Store for preview
             print_success(f"Page {i+1}: Extracted successfully")
             break
         except Exception as e:
@@ -641,7 +733,11 @@ def process_single_pdf(ocr: RitaOCR, folder: str, pdf_path: Path) -> Optional[In
     if not invoice:
         print_error("Could not extract any data from this PDF")
         print_info("You can try processing this file manually later")
+        cleanup_preview()
         return None
+    
+    # Set preview image for this invoice
+    set_preview_image(current_image)
     
     # Display extracted data
     calculated_total = display_invoice(invoice)
@@ -651,6 +747,7 @@ def process_single_pdf(ocr: RitaOCR, folder: str, pdf_path: Path) -> Optional[In
         print(f"\n  {Colors.BOLD}OPTIONS:{Colors.ENDC}")
         print(f"    [{Colors.GREEN}A{Colors.ENDC}] Approve - Save and continue to next")
         print(f"    [{Colors.YELLOW}E{Colors.ENDC}] Edit - Modify extracted data")
+        print(f"    [{Colors.CYAN}P{Colors.ENDC}] Preview - View the PDF image")
         print(f"    [{Colors.RED}S{Colors.ENDC}] Skip - Skip this PDF (will be re-processed later)")
         print(f"    [{Colors.RED}Q{Colors.ENDC}] Quit - Return to main menu")
         
@@ -665,6 +762,7 @@ def process_single_pdf(ocr: RitaOCR, folder: str, pdf_path: Path) -> Optional[In
             save_invoice_to_output(invoice)
             save_processed_file(folder, pdf_path.name)
             print_success(f"Saved! Invoice #{invoice.invoice_number} - Total: {calculated_total:,.2f}")
+            cleanup_preview()
             return invoice
         
         elif choice == 'E':
@@ -673,13 +771,19 @@ def process_single_pdf(ocr: RitaOCR, folder: str, pdf_path: Path) -> Optional[In
             # Recalculate and re-display
             calculated_total = display_invoice(invoice)
         
+        elif choice == 'P':
+            # Preview the PDF image
+            preview_current_image()
+        
         elif choice == 'S':
             # Skip - don't mark as processed
             print_warning("Skipped - will be available for processing later")
+            cleanup_preview()
             return None
         
         elif choice == 'Q':
             # Quit
+            cleanup_preview()
             return None
 
 

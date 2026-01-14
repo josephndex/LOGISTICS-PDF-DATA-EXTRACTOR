@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Home - RITA PDF Extractor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="main-header">🚗 RITA PDF Extractor</h1>
+    <p class="sub-header">AI-Powered Vehicle Maintenance Invoice Extraction</p>
+</div>
+
+<!-- Summary Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <span class="stat-icon">📄</span>
+        <div class="stat-info">
+            <span class="stat-number">{{ total_pdfs }}</span>
+            <span class="stat-title">Total PDFs</span>
+        </div>
+    </div>
+    <div class="stat-card success">
+        <span class="stat-icon">✅</span>
+        <div class="stat-info">
+            <span class="stat-number">{{ total_processed }}</span>
+            <span class="stat-title">Processed</span>
+        </div>
+    </div>
+    <div class="stat-card warning">
+        <span class="stat-icon">⏳</span>
+        <div class="stat-info">
+            <span class="stat-number">{{ total_pending }}</span>
+            <span class="stat-title">Pending</span>
+        </div>
+    </div>
+    <div class="stat-card info">
+        <span class="stat-icon">💰</span>
+        <div class="stat-info">
+            <span class="stat-number">KES {{ total_amount }}</span>
+            <span class="stat-title">Total Amount</span>
+        </div>
+    </div>
+</div>
+
+<!-- Folder Status -->
+<section class="card">
+    <h2 class="card-title">📁 Folder Status</h2>
+    
+    {% if folders %}
+    <div class="folder-list">
+        {% for folder in folders %}
+        <div class="folder-item">
+            <div class="folder-info">
+                <span class="folder-name">{{ folder.supplier }}</span>
+                <span class="folder-count">{{ folder.processed }}/{{ folder.total }}</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {{ folder.progress }}%"></div>
+            </div>
+            <div class="folder-status">
+                {% if folder.pending > 0 %}
+                <span class="badge badge-warning">{{ folder.pending }} pending</span>
+                {% else %}
+                <span class="badge badge-success">Done</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-warning">
+        No PDF folders found. Add folders with PDF files to the PDFS directory.
+    </div>
+    {% endif %}
+</section>
+
+<!-- Quick Actions -->
+<section class="card">
+    <h2 class="card-title">🚀 Quick Actions</h2>
+    <div class="action-buttons">
+        <a href="/process" class="btn btn-primary">
+            <span>📁</span> Process PDFs
+        </a>
+        <a href="/data" class="btn btn-secondary">
+            <span>📊</span> View Data
+        </a>
+        <a href="/export/excel" class="btn btn-secondary">
+            <span>📥</span> Export Excel
+        </a>
+    </div>
+</section>
+{% endblock %}

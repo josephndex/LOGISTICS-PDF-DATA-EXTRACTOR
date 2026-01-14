@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}Process PDFs - RITA PDF Extractor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📁 Process PDFs</h1>
+</div>
+
+<!-- Folder Selection -->
+<section class="card">
+    <h2 class="card-title">Select Folder</h2>
+    
+    {% if folders %}
+    <div class="folder-tabs">
+        {% for folder in folders %}
+        <a href="/process?folder={{ folder.name }}" 
+           class="folder-tab {% if folder.name == selected_folder %}active{% endif %}">
+            {{ folder.supplier }}
+            <span class="badge {% if folder.pending > 0 %}badge-warning{% else %}badge-success{% endif %}">
+                {{ folder.pending }}
+            </span>
+        </a>
+        {% endfor %}
+    </div>
+    
+    <div class="info-bar">
+        📊 {{ total_pdfs }} total PDFs | ⏳ {{ pending_count }} pending
+    </div>
+    {% else %}
+    <div class="alert alert-warning">
+        No PDF folders found!
+    </div>
+    {% endif %}
+</section>
+
+{% if pending_count == 0 and not current_invoice %}
+<section class="card">
+    <div class="alert alert-success">
+        ✅ All PDFs in this folder have been processed!
+    </div>
+    <form action="/settings/reset" method="post" style="margin-top: 1rem;">
+        <input type="hidden" name="folder" value="{{ selected_folder }}">
+        <button type="submit" class="btn btn-secondary">🔄 Reset and reprocess all</button>
+    </form>
+</section>
+{% elif not current_invoice %}
+<!-- PDF Selection -->
+<section class="card">
+    <h2 class="card-title">Select PDF</h2>
+    <form action="/process/extract" method="post">
+        <input type="hidden" name="folder" value="{{ selected_folder }}">
+        <div class="form-group">
+            <select name="pdf_name" class="form-select" required>
+                {% for pdf in unprocessed_pdfs %}
+                <option value="{{ pdf }}">{{ pdf }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary btn-lg">
+            🔍 Extract Data from PDF
+        </button>
+    </form>
+</section>
+{% endif %}
+
+{% if current_invoice %}
+<!-- Review Extracted Data -->
+<section class="card">
+    <h2 class="card-title">📋 Review Extracted Data</h2>
+    
+    <div class="review-grid">
+        <!-- Image Preview -->
+        <div class="image-preview">
+            <h3>🖼️ PDF Preview</h3>
+            {% if current_image_b64 %}
+            <img src="data:image/png;base64,{{ current_image_b64 }}" alt="Invoice Preview">
+            {% else %}
+            <div class="no-image">No preview available</div>
+            {% endif %}
+        </div>
+        
+        <!-- Data Form -->
+        <div class="data-form">
+            <h3>📝 Extracted Data</h3>
+            
+            <form action="/process/approve" method="post" id="invoice-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Invoice Number</label>
+                        <input type="text" name="invoice_number" 
+                               value="{{ current_invoice.invoice_number }}" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label>Date (DD/MM/YYYY)</label>
+                        <input type="text" name="date" 
+                               value="{{ current_invoice.date }}" class="form-input">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Vehicle Registration</label>
+                    <input type="text" name="vehicle" 
+                           value="{{ current_invoice.vehicle }}" class="form-input">
+                </div>
+                
+                <div class="form-info">
+                    <p><strong>Supplier:</strong> {{ current_invoice.supplier }}</p>
+                    <p><strong>Owner:</strong> {{ current_invoice.owner }}</p>
+                </div>
+                
+                <h4>Line Items</h4>
+                <div class="line-items" id="line-items">
+                    {% if current_invoice.line_items %}
+                    {% for item in current_invoice.line_items %}
+                    <div class="line-item">
+                        <input type="text" name="descriptions" value="{{ item.description }}" 
+                               placeholder="Description" class="form-input desc-input">
+                        <input type="number" name="quantities" value="{{ item.quantity }}" 
+                               placeholder="Qty" step="0.1" class="form-input qty-input">
+                        <input type="number" name="totals" value="{{ item.total }}" 
+                               placeholder="Total" step="0.01" class="form-input total-input">
+                        <button type="button" class="btn btn-danger btn-sm remove-item">✕</button>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                </div>
+                
+                <button type="button" class="btn btn-secondary btn-sm" id="add-item">+ Add Item</button>
+                
+                <div class="grand-total">
+                    <strong>Grand Total: KES <span id="grand-total">0.00</span></strong>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary btn-lg">✅ Approve & Save</button>
+                </div>
+            </form>
+            
+            <form action="/process/skip" method="post" class="skip-form">
+                <button type="submit" class="btn btn-secondary">⏭️ Skip</button>
+            </form>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const lineItems = document.getElementById('line-items');
+    const addItemBtn = document.getElementById('add-item');
+    const grandTotalSpan = document.getElementById('grand-total');
+    
+    if (addItemBtn) {
+        addItemBtn.addEventListener('click', function() {
+            const div = document.createElement('div');
+            div.className = 'line-item';
+            div.innerHTML = `
+                <input type="text" name="descriptions" placeholder="Description" class="form-input desc-input">
+                <input type="number" name="quantities" value="1" placeholder="Qty" step="0.1" class="form-input qty-input">
+                <input type="number" name="totals" value="0" placeholder="Total" step="0.01" class="form-input total-input">
+                <button type="button" class="btn btn-danger btn-sm remove-item">✕</button>
+            `;
+            lineItems.appendChild(div);
+            updateGrandTotal();
+        });
+    }
+    
+    if (lineItems) {
+        lineItems.addEventListener('click', function(e) {
+            if (e.target.classList.contains('remove-item')) {
+                e.target.closest('.line-item').remove();
+                updateGrandTotal();
+            }
+        });
+        
+        lineItems.addEventListener('input', function(e) {
+            if (e.target.classList.contains('total-input')) {
+                updateGrandTotal();
+            }
+        });
+    }
+    
+    function updateGrandTotal() {
+        const totals = document.querySelectorAll('.total-input');
+        let sum = 0;
+        totals.forEach(input => {
+            sum += parseFloat(input.value) || 0;
+        });
+        if (grandTotalSpan) {
+            grandTotalSpan.textContent = sum.toLocaleString('en-KE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        }
+    }
+    
+    updateGrandTotal();
+});
+</script>
+{% endblock %}
