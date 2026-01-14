@@ -991,17 +991,26 @@ def view_approved_data():
 # RESET PROCESSED STATUS
 # =============================================================================
 
-# Password hash for reset function (hashed "ITDONTMATTER")
-# Generated with: hashlib.sha256("ITDONTMATTER".encode()).hexdigest()
-_RESET_PASSWORD_HASH = "a3c9f8d7b6e5d4c3b2a1908f7e6d5c4b3a2918070f6e5d4c3b2a19080706050403"
+# Password hashes for reset functions
+# CHEROP - Clears processed_files.json only
+# NALA2024 - Full reset (clears everything including approved data)
+import hashlib as _hashlib
+_RESET_PASSWORDS = {
+    'partial': _hashlib.sha256("CHEROP".encode()).hexdigest(),      # Clears processed files only
+    'full': _hashlib.sha256("NALA2024".encode()).hexdigest(),       # Full reset - clears everything
+}
 
-def _verify_reset_password() -> bool:
-    """Verify the reset password."""
-    import hashlib
+def _verify_reset_password(password_type: str = 'partial') -> Tuple[bool, str]:
+    """Verify the reset password. Returns (success, password_type_matched)."""
     import getpass
     
     print(f"\n  {Colors.YELLOW}⚠ SECURITY CHECK{Colors.ENDC}")
-    print(f"  Reset requires administrator password.")
+    if password_type == 'full':
+        print(f"  {Colors.RED}Full reset requires password NALA2024{Colors.ENDC}")
+    else:
+        print(f"  Password required for reset action.")
+        print(f"    - CHEROP = Clear processed files tracking only")
+        print(f"    - NALA2024 = Full reset (clears ALL data)")
     
     try:
         # Use getpass to hide password input
@@ -1012,76 +1021,157 @@ def _verify_reset_password() -> bool:
             password = input("  Enter password: ").strip()
         
         # Hash the entered password and compare
-        entered_hash = hashlib.sha256(password.encode()).hexdigest()
-        expected_hash = "a8b5f3e9c7d6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0"  # Hash of ITDONTMATTER
+        entered_hash = _hashlib.sha256(password.encode()).hexdigest()
         
-        # Actually verify against the real hash
-        real_hash = hashlib.sha256("ITDONTMATTER".encode()).hexdigest()
-        
-        if entered_hash == real_hash:
-            print_success("Password verified")
-            return True
+        # Check against both passwords
+        if entered_hash == _RESET_PASSWORDS['full']:
+            print_success("Password verified (FULL RESET)")
+            return True, 'full'
+        elif entered_hash == _RESET_PASSWORDS['partial']:
+            print_success("Password verified (PARTIAL RESET)")
+            return True, 'partial'
         else:
             print_error("Incorrect password")
-            return False
+            return False, ''
     except (KeyboardInterrupt, EOFError):
         print("")
-        return False
+        return False, ''
 
 
 def reset_processed_status():
-    """Reset the processed status for a folder."""
+    """Reset the processed status for a folder or all data."""
     processed = load_processed_files()
     
-    if not processed:
-        print_warning("No files have been marked as processed yet.")
-        input("\n  Press Enter to continue...")
-        return
+    print_header("RESET OPTIONS")
     
-    print_header("RESET PROCESSED STATUS")
+    print(f"\n  {Colors.BOLD}Choose reset type:{Colors.ENDC}")
+    print(f"\n  {Colors.YELLOW}[1] Reset single folder{Colors.ENDC} - reprocess specific folder")
+    print(f"      (Password: CHEROP)")
     
-    print(f"\n  Current processed files:")
-    folders_list = list(processed.keys())
+    if processed:
+        folders_list = list(processed.keys())
+        for i, folder in enumerate(folders_list, 1):
+            count = len(processed[folder])
+            print(f"          [{i}] {folder}: {count} files")
     
-    for i, folder in enumerate(folders_list, 1):
-        count = len(processed[folder])
-        print(f"    [{i}] {folder}: {count} files")
+    print(f"\n  {Colors.YELLOW}[2] Clear processed files tracking{Colors.ENDC}")
+    print(f"      Clears processed_files.json only - approved data remains")
+    print(f"      (Password: CHEROP)")
     
-    print(f"\n    [A] Reset ALL folders")
-    print(f"    [0] Cancel")
+    print(f"\n  {Colors.RED}[3] FULL RESET - Delete Everything{Colors.ENDC}")
+    print(f"      ⚠️ Clears ALL data including:")
+    print(f"         - Processed files tracking")
+    print(f"         - approved_data.xlsx")
+    print(f"         - rita_master_data.xlsx")
+    print(f"         - All exported files")
+    print(f"      (Password: NALA2024)")
+    
+    print(f"\n  [0] Cancel")
     
     try:
-        choice = input("\n  Enter choice: ").strip().upper()
+        choice = input("\n  Enter choice: ").strip()
     except (KeyboardInterrupt, EOFError):
         return
     
     if choice == '0':
         return
     
-    # Verify password before any reset action
-    if not _verify_reset_password():
-        input("\n  Press Enter to continue...")
-        return
-    
-    if choice == 'A':
-        confirm = input(f"  {Colors.RED}Reset ALL processed status? This cannot be undone! [y/N]: {Colors.ENDC}").strip().lower()
-        if confirm == 'y':
-            if TRACKING_FILE.exists():
-                TRACKING_FILE.unlink()
-            print_success("All processed status reset")
-    else:
+    if choice == '1':
+        # Reset single folder
+        if not processed:
+            print_warning("No files have been marked as processed yet.")
+            input("\n  Press Enter to continue...")
+            return
+        
+        folders_list = list(processed.keys())
         try:
-            idx = int(choice) - 1
+            folder_choice = input("  Enter folder number: ").strip()
+            idx = int(folder_choice) - 1
             if 0 <= idx < len(folders_list):
                 folder = folders_list[idx]
-                confirm = input(f"  Reset processed status for {folder}? [y/N]: ").strip().lower()
-                if confirm == 'y':
-                    del processed[folder]
-                    with open(TRACKING_FILE, 'w') as f:
-                        json.dump(processed, f, indent=2)
-                    print_success(f"Processed status reset for {folder}")
+                
+                # Verify password
+                success, _ = _verify_reset_password('partial')
+                if not success:
+                    input("\n  Press Enter to continue...")
+                    return
+                
+                del processed[folder]
+                with open(TRACKING_FILE, 'w') as f:
+                    json.dump(processed, f, indent=2)
+                print_success(f"Processed status reset for {folder}")
+            else:
+                print_error("Invalid folder number")
         except ValueError:
             print_error("Invalid selection")
+    
+    elif choice == '2':
+        # Clear tracking only
+        success, _ = _verify_reset_password('partial')
+        if not success:
+            input("\n  Press Enter to continue...")
+            return
+        
+        if TRACKING_FILE.exists():
+            TRACKING_FILE.unlink()
+        with open(TRACKING_FILE, 'w') as f:
+            json.dump({}, f, indent=2)
+        print_success("Processed files tracking cleared!")
+    
+    elif choice == '3':
+        # Full reset
+        print(f"\n  {Colors.RED}{'═' * 50}{Colors.ENDC}")
+        print(f"  {Colors.RED}⚠️  WARNING: FULL RESET  ⚠️{Colors.ENDC}")
+        print(f"  {Colors.RED}This will delete ALL your data!{Colors.ENDC}")
+        print(f"  {Colors.RED}{'═' * 50}{Colors.ENDC}")
+        
+        confirm = input(f"\n  Type 'DELETE ALL' to confirm: ").strip()
+        if confirm != 'DELETE ALL':
+            print_warning("Reset cancelled")
+            input("\n  Press Enter to continue...")
+            return
+        
+        success, password_type = _verify_reset_password('full')
+        if not success or password_type != 'full':
+            print_error("Full reset requires NALA2024 password")
+            input("\n  Press Enter to continue...")
+            return
+        
+        # Clear everything
+        files_deleted = 0
+        
+        # Clear processed files tracking
+        if TRACKING_FILE.exists():
+            TRACKING_FILE.unlink()
+            files_deleted += 1
+        
+        # Clear approved data
+        approved_file = OUTPUT_DIR / "approved_data.xlsx"
+        if approved_file.exists():
+            approved_file.unlink()
+            files_deleted += 1
+        
+        # Clear master data
+        master_file = OUTPUT_DIR / "rita_master_data.xlsx"
+        if master_file.exists():
+            master_file.unlink()
+            files_deleted += 1
+        
+        # Clear all exported files
+        for f in OUTPUT_DIR.glob("rita_export_*.xlsx"):
+            f.unlink()
+            files_deleted += 1
+        for f in OUTPUT_DIR.glob("rita_export_*.csv"):
+            f.unlink()
+            files_deleted += 1
+        for f in OUTPUT_DIR.glob("rita_approved_*.xlsx"):
+            f.unlink()
+            files_deleted += 1
+        
+        print_success(f"FULL RESET COMPLETE! {files_deleted} files deleted.")
+    
+    else:
+        print_error("Invalid choice")
     
     input("\n  Press Enter to continue...")
 

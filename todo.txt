@@ -22,41 +22,7 @@
 | **Ground truth validation** | Use your ground_truth folder to create automated accuracy benchmarks |
 | **Expand KNOWN_ITEMS** | Build from your actual data - auto-extract common descriptions from `approved_data.xlsx` |
 
----
 
-### 3. **User Experience**
-
-| Improvement | Description |
-|-------------|-------------|
-| **Web UI (FastAPI/Jinja2)** | ✅ DONE - FastAPI web interface with side-by-side image preview |
-| **Image preview** | Show the PDF image side-by-side with extracted data for easier verification |
-| **Undo/Redo** | Add undo capability for edits in interactive mode |
-| **Batch approval** | Allow approving multiple simple invoices at once (like single-item ones) |
-| **Progress bar** | Add `tqdm` progress bars for batch processing |
-
----
-
-### 4. **Data Management**
-
-| Improvement | Description |
-|-------------|-------------|
-| **SQLite instead of Excel** | Use SQLite for `approved_data` - better for concurrent access and queries |
-| **Backup automation** | Auto-backup `approved_data.xlsx` before each session |
-| **Data validation rules** | Add validation (date must be reasonable, quantity > 0, etc.) |
-| **Audit trail** | Track who edited what and when (add `EDITED_AT`, `EDITED_BY` columns) |
-| **Export formats** | Add CSV, JSON, PDF report export options |
-
----
-
-### 5. **Supplier Onboarding**
-
-| Improvement | Description |
-|-------------|-------------|
-| **Auto-detect supplier** | Detect supplier from invoice content instead of folder name |
-| **Supplier config files** | JSON configs per supplier defining field locations, patterns, etc. |
-| **Training mode** | UI to mark regions on sample invoices to teach the system new formats |
-
----
 
 ### 6. **Integration & Automation**
 

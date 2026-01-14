@@ -172,13 +172,17 @@ class RitaDatabaseManager:
             logger.error(f"Error creating table: {e}")
             return False
     
-    def get_existing_keys(self, table_name: str) -> set:
-        """Get existing INVOICE|DESCRIPTION keys from database."""
+    def get_existing_keys(self, table_name: str) -> Optional[set]:
+        """Get existing INVOICE|DESCRIPTION keys from database.
+        
+        Returns:
+            Set of existing keys, or None if query failed (to prevent accidental duplicates)
+        """
         try:
             with self.get_connection() as conn:
                 from sqlalchemy import text
                 result = conn.execute(text(f"""
-                    SELECT CONCAT(INVOICE, '|', DESCRIPTION) as dup_key 
+                    SELECT CONCAT(COALESCE(INVOICE, ''), '|', COALESCE(DESCRIPTION, '')) as dup_key 
                     FROM `{table_name}`
                 """))
                 keys = set(row[0] for row in result.fetchall())
@@ -186,7 +190,7 @@ class RitaDatabaseManager:
                 return keys
         except Exception as e:
             logger.error(f"Error getting existing keys: {e}")
-            return set()
+            return None  # Return None instead of empty set to signal failure
     
     def upsert_data(
         self, 
@@ -221,6 +225,11 @@ class RitaDatabaseManager:
             
             # Get existing keys to avoid duplicates
             existing_keys = self.get_existing_keys(table_name)
+            
+            # If we couldn't fetch existing keys, abort to prevent duplicates
+            if existing_keys is None:
+                result["error"] = "Failed to fetch existing records from database. Aborting to prevent duplicates."
+                return result
             
             # Create duplicate key column
             df = df.copy()

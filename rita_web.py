@@ -14,7 +14,9 @@ import os
 import sys
 import json
 import base64
+import hashlib
 import warnings
+import threading
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -43,6 +45,14 @@ except ImportError as e:
     sys.exit(1)
 
 # =============================================================================
+# RESET PASSWORDS (hashed for security - passwords not stored in code)
+# =============================================================================
+RESET_PASSWORDS = {
+    'partial': '75458e160eebce5cc6737cdcf7555b92fe146dd825cdb318dc1d44dd4c60f99e',  # Partial reset
+    'full': 'a4a97c2dc6167c15348e65c16ebaedc334f6e6c9c2f8be51868ec5f1b2760cb5',     # Full reset
+}
+
+# =============================================================================
 # CONFIGURATION
 # =============================================================================
 
@@ -50,6 +60,8 @@ BASE_DIR = Path(__file__).parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 TRACKING_FILE = OUTPUT_DIR / "processed_files.json"
+GSHEETS_CONFIG_FILE = BASE_DIR / "google_sheets_config.json"
+GSHEETS_CREDENTIALS_FILE = BASE_DIR / "google_credentials.json"
 
 # Ensure directories exist
 TEMPLATES_DIR.mkdir(exist_ok=True)
@@ -66,17 +78,47 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # =============================================================================
-# OCR ENGINE (Singleton)
+# OCR ENGINE (Singleton with Background Preloading)
 # =============================================================================
 
 _ocr_instance: Optional[RitaOCR] = None
+_ocr_loading: bool = False
+_ocr_ready: bool = False
+
+def preload_ocr_engine():
+    """Preload OCR engine in background thread for faster processing."""
+    global _ocr_instance, _ocr_loading, _ocr_ready
+    if _ocr_instance is None and not _ocr_loading:
+        _ocr_loading = True
+        print("🔄 Preloading OCR engine in background...")
+        try:
+            _ocr_instance = RitaOCR()
+            _ocr_ready = True
+            print("✅ OCR engine ready!")
+        except Exception as e:
+            print(f"❌ OCR preload failed: {e}")
+        finally:
+            _ocr_loading = False
 
 def get_ocr_engine() -> RitaOCR:
     """Get or create OCR engine (singleton)."""
-    global _ocr_instance
+    global _ocr_instance, _ocr_ready
     if _ocr_instance is None:
+        print("⏳ Loading OCR engine (first time)...")
         _ocr_instance = RitaOCR()
+        _ocr_ready = True
     return _ocr_instance
+
+def is_ocr_ready() -> bool:
+    """Check if OCR engine is ready."""
+    return _ocr_ready
+
+# Start preloading OCR in background when app starts
+@app.on_event("startup")
+async def startup_event():
+    """Preload OCR engine on startup for faster first extraction."""
+    thread = threading.Thread(target=preload_ocr_engine, daemon=True)
+    thread.start()
 
 # =============================================================================
 # IN-MEMORY SESSION STORAGE
@@ -479,11 +521,18 @@ async def export_csv():
 
 
 @app.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request):
+async def settings_page(request: Request, message: Optional[str] = None, error: Optional[str] = None):
     """Settings page."""
     folders = get_folder_stats()
     processed = load_processed_files()
     total_processed_files = sum(len(files) for files in processed.values())
+    
+    # Check cloud sync status
+    gsheets_configured = GSHEETS_CONFIG_FILE.exists() and GSHEETS_CREDENTIALS_FILE.exists()
+    db_configured = (BASE_DIR / ".env").exists()
+    
+    # Count files in output directory
+    output_files = list(OUTPUT_DIR.glob("*.xlsx")) + list(OUTPUT_DIR.glob("*.csv"))
     
     return templates.TemplateResponse("settings.html", {
         "request": request,
@@ -493,25 +542,401 @@ async def settings_page(request: Request):
         "folders": folders,
         "processed_files": processed,
         "total_processed_files": total_processed_files,
-        "stats": get_dashboard_stats()
+        "stats": get_dashboard_stats(),
+        "gsheets_configured": gsheets_configured,
+        "db_configured": db_configured,
+        "output_file_count": len(output_files),
+        "ocr_ready": is_ocr_ready(),
+        "message": message,
+        "error": error
     })
 
 
+def verify_password(password: str, password_type: str) -> bool:
+    """Verify password against stored hash."""
+    entered_hash = hashlib.sha256(password.encode()).hexdigest()
+    return entered_hash == RESET_PASSWORDS.get(password_type, '')
+
+
 @app.post("/settings/reset")
-async def reset_folder(folder: str = Form(...)):
+async def reset_folder(folder: str = Form(...), password: str = Form(...)):
     """Reset processing status for a folder."""
+    if not verify_password(password, 'partial'):
+        return RedirectResponse("/settings?error=Invalid+password", status_code=303)
+    
     processed = load_processed_files()
     if folder in processed:
         processed[folder] = []
         save_processed_files(processed)
-    return RedirectResponse("/settings", status_code=303)
+    return RedirectResponse(f"/settings?message=Folder+{folder}+reset+successfully", status_code=303)
+
+
+@app.post("/settings/reset-processed")
+async def reset_processed(password: str = Form(...)):
+    """Reset only processed_files.json."""
+    if not verify_password(password, 'partial'):
+        return RedirectResponse("/settings?error=Invalid+password", status_code=303)
+    
+    # Only delete the tracking file
+    if TRACKING_FILE.exists():
+        TRACKING_FILE.unlink()
+    save_processed_files({})
+    return RedirectResponse("/settings?message=Processed+files+tracking+cleared!", status_code=303)
 
 
 @app.post("/settings/reset-all")
-async def reset_all():
-    """Reset processing status for all folders."""
+async def reset_all(password: str = Form(...)):
+    """Full reset - clears everything."""
+    if not verify_password(password, 'full'):
+        return RedirectResponse("/settings?error=Invalid+password", status_code=303)
+    
+    # Clear processed files tracking
+    if TRACKING_FILE.exists():
+        TRACKING_FILE.unlink()
     save_processed_files({})
-    return RedirectResponse("/settings", status_code=303)
+    
+    # Clear approved data
+    approved_file = OUTPUT_DIR / "approved_data.xlsx"
+    if approved_file.exists():
+        approved_file.unlink()
+    
+    # Clear master data
+    master_file = OUTPUT_DIR / "rita_master_data.xlsx"
+    if master_file.exists():
+        master_file.unlink()
+    
+    # Clear all exported files
+    for f in OUTPUT_DIR.glob("rita_export_*.xlsx"):
+        f.unlink()
+    for f in OUTPUT_DIR.glob("rita_export_*.csv"):
+        f.unlink()
+    
+    return RedirectResponse("/settings?message=Full+reset+complete!+All+data+cleared.", status_code=303)
+
+
+# =============================================================================
+# EXPORT FUNCTIONALITY (Full Excel Export with Master File)
+# =============================================================================
+
+@app.get("/export/master")
+async def export_master_excel():
+    """Export to master Excel file (like CLI option 4) - merges and dedupes."""
+    df_approved = load_approved_data()
+    if len(df_approved) == 0:
+        return JSONResponse({"error": "No approved data to export"}, status_code=400)
+    
+    # Load existing master file
+    master_file = OUTPUT_DIR / "rita_master_data.xlsx"
+    
+    if master_file.exists():
+        try:
+            df_existing = pd.read_excel(master_file)
+        except Exception:
+            df_existing = pd.DataFrame()
+    else:
+        df_existing = pd.DataFrame()
+    
+    # Combine both dataframes
+    if len(df_existing) > 0:
+        combined_df = pd.concat([df_existing, df_approved], ignore_index=True)
+    else:
+        combined_df = df_approved.copy()
+    
+    # Remove duplicates based on INVOICE + DESCRIPTION
+    original_count = len(combined_df)
+    combined_df['_dup_key'] = combined_df['INVOICE'].astype(str) + '|' + combined_df['DESCRIPTION'].astype(str)
+    combined_df = combined_df.drop_duplicates(subset=['_dup_key'], keep='first')
+    combined_df = combined_df.drop(columns=['_dup_key'])
+    duplicates_removed = original_count - len(combined_df)
+    
+    # Sort by DATE (descending - newest first)
+    try:
+        combined_df['_date_sort'] = pd.to_datetime(combined_df['DATE'], errors='coerce')
+        combined_df = combined_df.sort_values('_date_sort', ascending=False, na_position='last')
+        combined_df = combined_df.drop(columns=['_date_sort'])
+    except Exception:
+        pass
+    
+    # Ensure column order
+    columns = ['INVOICE', 'DATE', 'VEHICLE', 'DESCRIPTION', 'QUANTITY', 'UNIT_COST', 'TOTAL', 'SUPPLIER', 'OWNER']
+    for col in columns:
+        if col not in combined_df.columns:
+            combined_df[col] = ''
+    combined_df = combined_df[columns]
+    
+    # Save to master file
+    combined_df.to_excel(master_file, index=False)
+    
+    # Clear approved data after successful export
+    approved_file = OUTPUT_DIR / "approved_data.xlsx"
+    if approved_file.exists():
+        approved_file.unlink()
+    
+    return FileResponse(
+        master_file,
+        filename=f"rita_master_data_{datetime.now().strftime('%Y%m%d')}.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+
+# =============================================================================
+# CLOUD SYNC (Google Sheets + Database)
+# =============================================================================
+
+def check_gsheets_dependencies() -> bool:
+    """Check if Google Sheets dependencies are installed."""
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+        return True
+    except ImportError:
+        return False
+
+def check_db_dependencies() -> bool:
+    """Check if database dependencies are installed."""
+    try:
+        import sqlalchemy
+        import mysql.connector
+        from dotenv import load_dotenv
+        return True
+    except ImportError:
+        return False
+
+def load_gsheets_config() -> Optional[Dict]:
+    """Load Google Sheets configuration."""
+    if not GSHEETS_CONFIG_FILE.exists():
+        return None
+    try:
+        with open(GSHEETS_CONFIG_FILE, 'r') as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+@app.get("/sync", response_class=HTMLResponse)
+async def sync_page(request: Request):
+    """Cloud sync page - Google Sheets and Database."""
+    # Check what's available
+    master_file = OUTPUT_DIR / "rita_master_data.xlsx"
+    has_master_data = master_file.exists()
+    
+    master_records = 0
+    if has_master_data:
+        try:
+            df = pd.read_excel(master_file)
+            master_records = len(df)
+        except Exception:
+            pass
+    
+    # Check services status
+    gsheets_available = check_gsheets_dependencies()
+    gsheets_configured = GSHEETS_CONFIG_FILE.exists() and GSHEETS_CREDENTIALS_FILE.exists()
+    
+    db_available = check_db_dependencies()
+    db_configured = (BASE_DIR / ".env").exists()
+    
+    return templates.TemplateResponse("sync.html", {
+        "request": request,
+        "page": "sync",
+        "stats": get_dashboard_stats(),
+        "has_master_data": has_master_data,
+        "master_records": master_records,
+        "gsheets_available": gsheets_available,
+        "gsheets_configured": gsheets_configured,
+        "db_available": db_available,
+        "db_configured": db_configured,
+    })
+
+
+@app.post("/sync/sheets")
+async def sync_to_google_sheets():
+    """Sync data to Google Sheets."""
+    master_file = OUTPUT_DIR / "rita_master_data.xlsx"
+    
+    if not master_file.exists():
+        return JSONResponse({
+            "success": False,
+            "error": "Master data file not found. Please export to Excel first."
+        })
+    
+    if not check_gsheets_dependencies():
+        return JSONResponse({
+            "success": False,
+            "error": "Google Sheets libraries not installed. Run: pip install gspread google-auth"
+        })
+    
+    if not GSHEETS_CONFIG_FILE.exists() or not GSHEETS_CREDENTIALS_FILE.exists():
+        return JSONResponse({
+            "success": False,
+            "error": "Google Sheets not configured. Add google_sheets_config.json and google_credentials.json"
+        })
+    
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+        
+        df = pd.read_excel(master_file)
+        config = load_gsheets_config()
+        
+        if not config:
+            return JSONResponse({
+                "success": False,
+                "error": "Could not load Google Sheets configuration"
+            })
+        
+        spreadsheet_id = config.get('spreadsheet_id', '')
+        worksheet_name = config.get('worksheet_name', 'Sheet1')
+        
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"
+        ]
+        creds = Credentials.from_service_account_file(str(GSHEETS_CREDENTIALS_FILE), scopes=scopes)
+        client = gspread.authorize(creds)
+        
+        spreadsheet = client.open_by_key(spreadsheet_id)
+        
+        try:
+            worksheet = spreadsheet.worksheet(worksheet_name)
+        except Exception:
+            worksheet = spreadsheet.add_worksheet(title=worksheet_name, rows=5000, cols=20)
+        
+        # Get existing data
+        existing_data = worksheet.get_all_values()
+        headers = ['INVOICE', 'DATE', 'VEHICLE', 'DESCRIPTION', 'QUANTITY', 'UNIT_COST', 'TOTAL', 'SUPPLIER', 'OWNER']
+        
+        # Check if sheet has headers
+        has_headers = len(existing_data) > 0 and existing_data[0] and str(existing_data[0][0]).upper().strip() == 'INVOICE'
+        
+        if not has_headers:
+            # Fresh push
+            worksheet.clear()
+            all_rows = [headers]
+            for _, row in df.iterrows():
+                all_rows.append([str(row.get(col, '')) for col in headers])
+            worksheet.update('A1', all_rows)
+            
+            return JSONResponse({
+                "success": True,
+                "message": f"Pushed {len(df)} records to Google Sheets!",
+                "inserted": len(df),
+                "skipped": 0
+            })
+        else:
+            # Incremental push
+            existing_keys = set()
+            for row in existing_data[1:]:
+                if len(row) >= 4:
+                    existing_keys.add(f"{row[0]}|{row[3]}")
+            
+            new_rows = []
+            for _, row in df.iterrows():
+                key = f"{row.get('INVOICE', '')}|{row.get('DESCRIPTION', '')}"
+                if key not in existing_keys:
+                    new_rows.append([str(row.get(col, '')) for col in headers])
+            
+            if new_rows:
+                worksheet.append_rows(new_rows)
+            
+            return JSONResponse({
+                "success": True,
+                "message": f"Pushed {len(new_rows)} new records to Google Sheets!",
+                "inserted": len(new_rows),
+                "skipped": len(df) - len(new_rows)
+            })
+            
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": f"Google Sheets error: {str(e)}"
+        })
+
+
+@app.post("/sync/database")
+async def sync_to_database():
+    """Sync data to MySQL database."""
+    master_file = OUTPUT_DIR / "rita_master_data.xlsx"
+    
+    if not master_file.exists():
+        return JSONResponse({
+            "success": False,
+            "error": "Master data file not found. Please export to Excel first."
+        })
+    
+    if not check_db_dependencies():
+        return JSONResponse({
+            "success": False,
+            "error": "Database libraries not installed. Run: pip install sqlalchemy mysql-connector-python python-dotenv"
+        })
+    
+    env_file = BASE_DIR / ".env"
+    if not env_file.exists():
+        return JSONResponse({
+            "success": False,
+            "error": "Database not configured. Create a .env file with DB_HOST, DB_NAME, DB_USER, DB_PASSWORD"
+        })
+    
+    try:
+        from rita_database import RitaDatabaseManager
+        
+        df = pd.read_excel(master_file)
+        db_manager = RitaDatabaseManager(str(env_file))
+        
+        # Test connection
+        if not db_manager.test_connection():
+            return JSONResponse({
+                "success": False,
+                "error": "Could not connect to database. Check your .env settings."
+            })
+        
+        # Upsert data
+        result = db_manager.upsert_data(df, table_name="maintainance")
+        
+        if result["success"]:
+            total = db_manager.get_record_count("maintainance")
+            return JSONResponse({
+                "success": True,
+                "message": f"Database sync complete!",
+                "inserted": result["inserted"],
+                "skipped": result["skipped"],
+                "total_in_db": total
+            })
+        else:
+            return JSONResponse({
+                "success": False,
+                "error": f"Database error: {result.get('error', 'Unknown error')}"
+            })
+            
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": f"Database error: {str(e)}"
+        })
+
+
+@app.post("/sync/all")
+async def sync_all():
+    """Sync to both Google Sheets and Database."""
+    sheets_result = await sync_to_google_sheets()
+    db_result = await sync_to_database()
+    
+    # Parse JSON responses
+    sheets_data = json.loads(sheets_result.body) if hasattr(sheets_result, 'body') else {}
+    db_data = json.loads(db_result.body) if hasattr(db_result, 'body') else {}
+    
+    return JSONResponse({
+        "google_sheets": sheets_data,
+        "database": db_data
+    })
+
+
+@app.get("/api/ocr-status")
+async def get_ocr_status():
+    """Check if OCR engine is ready."""
+    return JSONResponse({
+        "ready": is_ocr_ready(),
+        "loading": _ocr_loading
+    })
 
 
 def get_dashboard_stats() -> Dict:
@@ -519,7 +944,8 @@ def get_dashboard_stats() -> Dict:
     df = load_approved_data()
     return {
         'total_records': len(df),
-        'total_amount': f"{df['TOTAL'].sum():,.2f}" if len(df) > 0 else "0.00"
+        'total_amount': f"{df['TOTAL'].sum():,.2f}" if len(df) > 0 else "0.00",
+        'ocr_ready': is_ocr_ready()
     }
 
 

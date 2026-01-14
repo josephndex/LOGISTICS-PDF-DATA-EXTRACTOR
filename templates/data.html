@@ -147,11 +147,28 @@
 
 <!-- Export -->
 <section class="card">
-    <h2 class="card-title">📥 Export</h2>
-    <div class="action-buttons">
-        <a href="/export/excel" class="btn btn-primary">⬇️ Download Excel</a>
-        <a href="/export/csv" class="btn btn-secondary">⬇️ Download CSV</a>
+    <h2 class="card-title">📥 Export Data</h2>
+    <div class="export-options">
+        <div class="export-group">
+            <h3>Quick Export (Current View)</h3>
+            <div class="action-buttons">
+                <a href="/export/excel" class="btn btn-secondary">⬇️ Download Excel</a>
+                <a href="/export/csv" class="btn btn-secondary">⬇️ Download CSV</a>
+            </div>
+        </div>
+        <div class="export-group">
+            <h3>📋 Export to Master File (Recommended)</h3>
+            <p class="hint">Merges with existing master data, removes duplicates, sorts by date</p>
+            <a href="/export/master" class="btn btn-primary btn-lg">📥 Export & Download Master Excel</a>
+        </div>
     </div>
+</section>
+
+<!-- Cloud Sync CTA -->
+<section class="card sync-cta">
+    <h2 class="card-title">☁️ Ready to Sync?</h2>
+    <p>Push your data to Google Sheets and MySQL Database</p>
+    <a href="/sync" class="btn btn-success">☁️ Go to Sync Page</a>
 </section>
 
 {% endif %}

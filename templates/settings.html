@@ -7,6 +7,42 @@
     <h1>⚙️ Settings</h1>
 </div>
 
+<!-- Messages -->
+{% if message %}
+<div class="alert alert-success">✅ {{ message }}</div>
+{% endif %}
+{% if error %}
+<div class="alert alert-error">❌ {{ error }}</div>
+{% endif %}
+
+<!-- System Status -->
+<section class="card">
+    <h2 class="card-title">📊 System Status</h2>
+    <div class="status-grid">
+        <div class="status-item">
+            <span class="status-icon {% if ocr_ready %}status-ready{% else %}status-loading{% endif %}">
+                {% if ocr_ready %}✅{% else %}⏳{% endif %}
+            </span>
+            <span class="status-label">OCR Engine</span>
+            <span class="status-value">{% if ocr_ready %}Ready{% else %}Loading...{% endif %}</span>
+        </div>
+        <div class="status-item">
+            <span class="status-icon {% if gsheets_configured %}status-ready{% else %}status-warning{% endif %}">
+                {% if gsheets_configured %}✅{% else %}⚠️{% endif %}
+            </span>
+            <span class="status-label">Google Sheets</span>
+            <span class="status-value">{% if gsheets_configured %}Configured{% else %}Not configured{% endif %}</span>
+        </div>
+        <div class="status-item">
+            <span class="status-icon {% if db_configured %}status-ready{% else %}status-warning{% endif %}">
+                {% if db_configured %}✅{% else %}⚠️{% endif %}
+            </span>
+            <span class="status-label">Database</span>
+            <span class="status-value">{% if db_configured %}Configured{% else %}Not configured{% endif %}</span>
+        </div>
+    </div>
+</section>
+
 <!-- Paths -->
 <section class="card">
     <h2 class="card-title">📁 Paths</h2>
@@ -39,29 +75,53 @@
                     <option value="{{ folder.name }}">{{ folder.supplier }} ({{ folder.processed }} processed)</option>
                     {% endfor %}
                 </select>
+                <input type="password" name="password" placeholder="Enter password" class="form-input" required>
                 <button type="submit" class="btn btn-secondary">🔄 Reset Folder</button>
             </div>
         </form>
     </div>
     
     <div class="reset-section">
-        <h3>Reset All Folders</h3>
-        <form action="/settings/reset-all" method="post">
-            <button type="submit" class="btn btn-danger" 
-                    onclick="return confirm('Are you sure you want to reset ALL folders?')">
-                🔄 Reset ALL Folders
-            </button>
+        <h3>Reset All Processed Files Tracking</h3>
+        <p class="hint">Clears processed_files.json only - data remains intact</p>
+        <form action="/settings/reset-processed" method="post" class="reset-form">
+            <div class="form-row">
+                <input type="password" name="password" placeholder="Enter password" class="form-input" required>
+                <button type="submit" class="btn btn-warning">🔄 Clear Tracking Only</button>
+            </div>
         </form>
     </div>
     {% endif %}
 </section>
 
-<!-- Database Status -->
+<!-- Full Reset -->
+<section class="card danger-zone">
+    <h2 class="card-title">🚨 Danger Zone - Full Reset</h2>
+    <div class="alert alert-error">
+        <strong>⚠️ WARNING: This will delete ALL data!</strong>
+        <ul>
+            <li>Processed files tracking</li>
+            <li>Approved data (approved_data.xlsx)</li>
+            <li>Master data file (rita_master_data.xlsx)</li>
+            <li>All exported files</li>
+        </ul>
+    </div>
+    
+    <form action="/settings/reset-all" method="post" onsubmit="return confirm('⚠️ FINAL WARNING!\n\nThis will DELETE ALL DATA including:\n- All approved invoices\n- Master data file\n- All exports\n\nThis CANNOT be undone!\n\nAre you absolutely sure?');">
+        <div class="form-row">
+            <input type="password" name="password" placeholder="Enter admin password" class="form-input" required>
+            <button type="submit" class="btn btn-danger">💥 FULL RESET - DELETE EVERYTHING</button>
+        </div>
+    </form>
+</section>
+
+<!-- Processing History -->
 <section class="card">
-    <h2 class="card-title">📊 Database Status</h2>
+    <h2 class="card-title">📄 Processing History</h2>
     <div class="status-info">
         <p>📁 <strong>{{ processed_files|length }}</strong> folders tracked</p>
         <p>📄 <strong>{{ total_processed_files }}</strong> files processed</p>
+        <p>📊 <strong>{{ output_file_count }}</strong> files in output folder</p>
     </div>
     
     <details class="processed-details">

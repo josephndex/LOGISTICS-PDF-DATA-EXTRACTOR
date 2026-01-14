@@ -1,0 +1,230 @@
+{% extends "base.html" %}
+
+{% block title %}Sync to Cloud - RITA PDF Extractor{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>☁️ Sync to Cloud</h1>
+    <p class="subtitle">Push your data to Google Sheets and MySQL Database</p>
+</div>
+
+<!-- Workflow Steps -->
+<section class="card workflow-card">
+    <h2 class="card-title">📋 Sync Workflow</h2>
+    <div class="workflow-steps">
+        <div class="step {% if stats.total_records > 0 %}completed{% endif %}">
+            <span class="step-number">1</span>
+            <span class="step-title">Process PDFs</span>
+            <span class="step-desc">Extract and approve invoices</span>
+        </div>
+        <div class="step-arrow">→</div>
+        <div class="step {% if has_master_data %}completed{% endif %}">
+            <span class="step-number">2</span>
+            <span class="step-title">Export to Excel</span>
+            <span class="step-desc">Create master data file</span>
+        </div>
+        <div class="step-arrow">→</div>
+        <div class="step">
+            <span class="step-number">3</span>
+            <span class="step-title">Sync to Cloud</span>
+            <span class="step-desc">Push to Sheets & Database</span>
+        </div>
+    </div>
+</section>
+
+<!-- Step 1: Export to Master Excel -->
+<section class="card">
+    <h2 class="card-title">📋 Step 1: Export to Master Excel</h2>
+    <p class="card-desc">Merge approved data into master file (removes duplicates, sorts by date)</p>
+    
+    <div class="status-row">
+        <div class="status-item">
+            <span class="status-label">Approved Records:</span>
+            <span class="status-value">{{ stats.total_records }}</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">Master File Records:</span>
+            <span class="status-value">{{ master_records }}</span>
+        </div>
+    </div>
+    
+    {% if stats.total_records > 0 %}
+    <a href="/export/master" class="btn btn-primary btn-lg">
+        📥 Export & Download Master Excel
+    </a>
+    <p class="hint">This merges approved data into master file and clears approved data</p>
+    {% else %}
+    <div class="alert alert-warning">
+        No approved data to export. <a href="/process">Process some PDFs first</a>.
+    </div>
+    {% endif %}
+</section>
+
+<!-- Step 2: Google Sheets -->
+<section class="card">
+    <h2 class="card-title">📊 Step 2: Sync to Google Sheets</h2>
+    
+    <div class="service-status">
+        {% if gsheets_available and gsheets_configured %}
+        <span class="status-badge status-ready">✅ Ready</span>
+        {% elif gsheets_available %}
+        <span class="status-badge status-warning">⚠️ Not Configured</span>
+        {% else %}
+        <span class="status-badge status-error">❌ Not Installed</span>
+        {% endif %}
+    </div>
+    
+    {% if not gsheets_available %}
+    <div class="alert alert-warning">
+        <strong>Dependencies missing!</strong> Install with:
+        <code>pip install gspread google-auth</code>
+    </div>
+    {% elif not gsheets_configured %}
+    <div class="alert alert-warning">
+        <strong>Configuration needed!</strong> Add these files:
+        <ul>
+            <li><code>google_credentials.json</code> - Service account credentials</li>
+            <li><code>google_sheets_config.json</code> - Spreadsheet ID and worksheet name</li>
+        </ul>
+    </div>
+    {% else %}
+    <div id="sheets-result" class="sync-result"></div>
+    <button onclick="syncToSheets()" class="btn btn-success btn-lg" id="sheets-btn" {% if not has_master_data %}disabled{% endif %}>
+        📤 Push to Google Sheets
+    </button>
+    {% if not has_master_data %}
+    <p class="hint">Export to Excel first (Step 1)</p>
+    {% endif %}
+    {% endif %}
+</section>
+
+<!-- Step 3: MySQL Database -->
+<section class="card">
+    <h2 class="card-title">🗄️ Step 3: Sync to MySQL Database</h2>
+    
+    <div class="service-status">
+        {% if db_available and db_configured %}
+        <span class="status-badge status-ready">✅ Ready</span>
+        {% elif db_available %}
+        <span class="status-badge status-warning">⚠️ Not Configured</span>
+        {% else %}
+        <span class="status-badge status-error">❌ Not Installed</span>
+        {% endif %}
+    </div>
+    
+    {% if not db_available %}
+    <div class="alert alert-warning">
+        <strong>Dependencies missing!</strong> Install with:
+        <code>pip install sqlalchemy mysql-connector-python python-dotenv</code>
+    </div>
+    {% elif not db_configured %}
+    <div class="alert alert-warning">
+        <strong>Configuration needed!</strong> Create a <code>.env</code> file with:
+        <pre>DB_HOST=your-server.com
+DB_NAME=your_database
+DB_USER=your_username
+DB_PASSWORD=your_password</pre>
+    </div>
+    {% else %}
+    <div id="db-result" class="sync-result"></div>
+    <button onclick="syncToDatabase()" class="btn btn-success btn-lg" id="db-btn" {% if not has_master_data %}disabled{% endif %}>
+        📤 Push to Database
+    </button>
+    {% if not has_master_data %}
+    <p class="hint">Export to Excel first (Step 1)</p>
+    {% endif %}
+    {% endif %}
+</section>
+
+<!-- Sync All -->
+{% if has_master_data and gsheets_configured and db_configured %}
+<section class="card sync-all-card">
+    <h2 class="card-title">🚀 Sync to All Services</h2>
+    <p>Push data to both Google Sheets and MySQL Database in one click.</p>
+    <button onclick="syncAll()" class="btn btn-primary btn-xl">
+        ☁️ Sync All
+    </button>
+    <div id="all-result" class="sync-result"></div>
+</section>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showResult(elementId, data) {
+    const el = document.getElementById(elementId);
+    if (data.success) {
+        el.innerHTML = `
+            <div class="alert alert-success">
+                <strong>✅ ${data.message}</strong><br>
+                Inserted: ${data.inserted || 0} | Skipped: ${data.skipped || 0}
+                ${data.total_in_db ? `<br>Total in DB: ${data.total_in_db}` : ''}
+            </div>
+        `;
+    } else {
+        el.innerHTML = `
+            <div class="alert alert-error">
+                <strong>❌ Error:</strong> ${data.error}
+            </div>
+        `;
+    }
+}
+
+async function syncToSheets() {
+    const btn = document.getElementById('sheets-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Syncing...';
+    
+    try {
+        const response = await fetch('/sync/sheets', { method: 'POST' });
+        const data = await response.json();
+        showResult('sheets-result', data);
+    } catch (e) {
+        showResult('sheets-result', { success: false, error: e.message });
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '📤 Push to Google Sheets';
+    }
+}
+
+async function syncToDatabase() {
+    const btn = document.getElementById('db-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Syncing...';
+    
+    try {
+        const response = await fetch('/sync/database', { method: 'POST' });
+        const data = await response.json();
+        showResult('db-result', data);
+    } catch (e) {
+        showResult('db-result', { success: false, error: e.message });
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '📤 Push to Database';
+    }
+}
+
+async function syncAll() {
+    document.getElementById('all-result').innerHTML = '<div class="alert alert-info">⏳ Syncing to all services...</div>';
+    
+    // Run both syncs
+    const sheetsPromise = fetch('/sync/sheets', { method: 'POST' }).then(r => r.json());
+    const dbPromise = fetch('/sync/database', { method: 'POST' }).then(r => r.json());
+    
+    try {
+        const [sheetsData, dbData] = await Promise.all([sheetsPromise, dbPromise]);
+        
+        showResult('sheets-result', sheetsData);
+        showResult('db-result', dbData);
+        
+        const allSuccess = sheetsData.success && dbData.success;
+        document.getElementById('all-result').innerHTML = allSuccess 
+            ? '<div class="alert alert-success">🎉 All syncs completed successfully!</div>'
+            : '<div class="alert alert-warning">⚠️ Some syncs failed. Check individual results above.</div>';
+    } catch (e) {
+        document.getElementById('all-result').innerHTML = `<div class="alert alert-error">❌ Error: ${e.message}</div>`;
+    }
+}
+</script>
+{% endblock %}
